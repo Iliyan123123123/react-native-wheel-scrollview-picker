@@ -8,31 +8,11 @@ import {
   StyleSheet,
   Text,
   View,
-  ViewProps,
   ViewStyle,
 } from "react-native";
 
-function isNumeric(str: string | unknown): boolean {
-  if (typeof str === "number") return true;
-  if (typeof str !== "string") return false;
-  return (
-    !isNaN(str as unknown as number) && // use type coercion to parse the _entirety_ of the string (`parseFloat` alone does not do this)...
-    !isNaN(parseFloat(str))
-  ); // ...and ensure strings of whitespace fail
-}
-
-const deviceWidth = Dimensions.get("window").width;
-
-const isViewStyle = (style: ViewProps["style"]): style is ViewStyle => {
-  return (
-    typeof style === "object" &&
-    style !== null &&
-    Object.keys(style).includes("height")
-  );
-};
-
 export type ScrollPickerProps = {
-  style?: ViewProps["style"];
+  style?: ViewStyle;
   dataSource: Array<string | number>;
   selectedIndex?: number;
   onValueChange?: (
@@ -46,13 +26,12 @@ export type ScrollPickerProps = {
   ) => JSX.Element;
   highlightColor?: string;
 
-  itemHeight?: number;
-  wrapperHeight?: number;
-  wrapperColor?: string;
+  wrapperStyle?: ViewStyle;
+  itemStyle?: ViewStyle
 };
 
 export default function ScrollPicker({
-  itemHeight = 30,
+  itemStyle = {height: 30},
   style,
   ...props
 }: ScrollPickerProps): JSX.Element {
@@ -66,20 +45,13 @@ export default function ScrollPicker({
   const [momentumStarted, setMomentumStarted] = useState(false);
   const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
 
-  const wrapperHeight =
-    props.wrapperHeight ||
-    (isViewStyle(style) && isNumeric(style.height)
-      ? Number(style.height)
-      : 0) ||
-    itemHeight * 5;
-
   useEffect(
     function initialize() {
       if (initialized) return;
       setInitialized(true);
 
       setTimeout(() => {
-        const y = itemHeight * selectedIndex;
+        const y = Number(itemStyle.height) * selectedIndex;
         sView?.current?.scrollTo({ y: y });
       }, 0);
 
@@ -87,11 +59,11 @@ export default function ScrollPicker({
         timer && clearTimeout(timer);
       };
     },
-    [initialized, itemHeight, selectedIndex, sView, timer]
+    [initialized, itemStyle, selectedIndex, sView, timer]
   );
 
   const renderPlaceHolder = () => {
-    const h = (wrapperHeight - itemHeight) / 2;
+    const h = (Number(props.wrapperStyle?.height) - Number(itemStyle.height)) / 2;
     const header = <View style={{ height: h, flex: 1 }} />;
     const footer = <View style={{ height: h, flex: 1 }} />;
     return { header, footer };
@@ -105,19 +77,13 @@ export default function ScrollPicker({
     const item = props.renderItem ? (
       props.renderItem(data, index, isSelected)
     ) : (
-      <Text
-        style={
-          isSelected
-            ? [styles.itemText, styles.itemTextSelected]
-            : styles.itemText
-        }
-      >
+      <Text>
         {data}
       </Text>
     );
 
     return (
-      <View style={[styles.itemWrapper, { height: itemHeight }]} key={index}>
+      <View style={[ { height: Number(itemStyle.height) }]} key={index}>
         {item}
       </View>
     );
@@ -125,7 +91,7 @@ export default function ScrollPicker({
   const scrollFix = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       let y = 0;
-      const h = itemHeight;
+      const h = Number(itemStyle.height);
       if (e.nativeEvent.contentOffset) {
         y = e.nativeEvent.contentOffset.y;
       }
@@ -149,7 +115,7 @@ export default function ScrollPicker({
         props.onValueChange(selectedValue, _selectedIndex);
       }
     },
-    [itemHeight, props, selectedIndex]
+    [Number(itemStyle.height), props, selectedIndex]
   );
 
   const onScrollBeginDrag = () => {
@@ -189,29 +155,20 @@ export default function ScrollPicker({
   };
 
   const { header, footer } = renderPlaceHolder();
-  const highlightWidth = (isViewStyle(style) ? style.width : 0) || deviceWidth;
-  const highlightColor = props.highlightColor || "#333";
-
-  const wrapperStyle: ViewStyle = {
-    height: wrapperHeight,
-    flex: 1,
-    backgroundColor: props.wrapperColor || "#fafafa",
-    overflow: "hidden",
-  };
 
   const highlightStyle: ViewStyle = {
     position: "absolute",
-    top: (wrapperHeight - itemHeight) / 2,
-    height: itemHeight,
-    width: highlightWidth,
-    borderTopColor: highlightColor,
-    borderBottomColor: highlightColor,
+    top: (Number(props.wrapperStyle?.height) - Number(itemStyle.height)) / 2,
+    height: itemStyle.height,
+    width: "100%",
+    borderTopColor: props.highlightColor,
+    borderBottomColor: props.highlightColor,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   };
 
   return (
-    <View style={wrapperStyle}>
+    <View style={props.wrapperStyle}>
       <View style={highlightStyle} />
       <ScrollView
         ref={sView}
@@ -229,17 +186,3 @@ export default function ScrollPicker({
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  itemWrapper: {
-    height: 30,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  itemText: {
-    color: "#999",
-  },
-  itemTextSelected: {
-    color: "#333",
-  },
-});
