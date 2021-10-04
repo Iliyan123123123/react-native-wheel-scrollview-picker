@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   NativeScrollEvent,
   NativeSyntheticEvent,
@@ -9,12 +9,7 @@ import {
   ViewStyle,
 } from "react-native";
 
-//TODO: Make it work with % and vh
-interface CustomViewStyle extends ViewStyle{
-  height: number
-}
-
-export type ScrollPickerProps = {
+export interface ScrollPickerProps {
   dataSource: Array<string | number>;
   renderItem: (
     data: string | number,
@@ -25,40 +20,34 @@ export type ScrollPickerProps = {
     index: number
   ) => void;
   highlightColor?: string;
-  highlightHeight: 30;
-  selectedIndex: 0;
-
-  wrapperStyle?: CustomViewStyle;
+  selectedIndex?: number;
+  wrapperStyle?: ViewStyle;
 };
 
 const ScrollPicker = (props: ScrollPickerProps): JSX.Element => {
   const [selectedIndex, setSelectedIndex] = useState<number>(
-    props.selectedIndex >= 0 ? props.selectedIndex : 0
+    props.selectedIndex && props.selectedIndex >= 0 ? props.selectedIndex : 0
     );
   const sView = useRef<ScrollView>(null);
   const [isScrollTo, setIsScrollTo] = useState(false);
-  const [dragStarted, setDragStarted] = useState(false);
-  const [momentumStarted, setMomentumStarted] = useState(false);
+  const [heightOfElement, setHeightOfElement] = useState(1);
 
+  //Moves to the initially selected element;
   useEffect(() => {
       setTimeout(() => {
-        sView?.current?.scrollTo({ y:  props.highlightHeight || 0 * selectedIndex });
+        sView?.current?.scrollTo({ y:  heightOfElement * selectedIndex });
       }, 0);
-    },[]);
+  },[]);
+  
+  //Coorects the view on drag event;
+  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
 
-  const renderPlaceHolder = () => {
-    const h = ((props.wrapperStyle?.height || 0) - props.highlightHeight) / 2;
-    const header = <View style={{ height: h, flex: 1 }} />;
-    const footer = <View style={{ height: h, flex: 1 }} />;
-    return { header, footer };
-  };
-  const scrollFix = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      
-      const positionAfterScroll = e.nativeEvent.contentOffset.y || 0;
-      const closestElementToScrollPosition = Math.round(positionAfterScroll / props.highlightHeight);
+    if (isScrollTo) return;
 
-      const positionOfClosetElement = closestElementToScrollPosition * props.highlightHeight;
+    const positionAfterScroll = e.nativeEvent.contentOffset.y || 0;
+      const closestElementToScrollPosition = Math.round(positionAfterScroll / heightOfElement);
+
+      const positionOfClosetElement = closestElementToScrollPosition * heightOfElement;
       if (positionOfClosetElement !== positionAfterScroll) {
         // using scrollTo in ios, onMomentumScrollEnd will be invoked
         if (Platform.OS === "ios") {
@@ -74,48 +63,12 @@ const ScrollPicker = (props: ScrollPickerProps): JSX.Element => {
           closestElementToScrollPosition
         );
       }
-    },
-    [props, selectedIndex]
-  );
-
-  const onScrollBeginDrag = () => {
-    setDragStarted(true);
-
-    if (Platform.OS === "ios") {
-      setIsScrollTo(false);
-    }
   };
-
-  const onScrollEndDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setDragStarted(false);
-
-    // if not used, event will be garbaged
-    const _e: NativeSyntheticEvent<NativeScrollEvent> = { ...e };
-      setTimeout(() => {
-        if (!momentumStarted) {
-          scrollFix(_e);
-        }
-      }, 50)
-  };
-  
-  const onMomentumScrollBegin = () => {
-    setMomentumStarted(true);
-  };
-
-  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setMomentumStarted(false);
-
-    if (!isScrollTo && !dragStarted) {
-      scrollFix(e);
-    }
-  };
-
-  const { header, footer } = renderPlaceHolder();
 
   const highlightStyle: ViewStyle = {
     position: "absolute",
-    top: ((props.wrapperStyle?.height || 0) - props.highlightHeight) / 2,
-    height: props.highlightHeight,
+    top: "35%",
+    height: "30%",
     width: "100%",
     borderTopColor: props.highlightColor,
     borderBottomColor: props.highlightColor,
@@ -125,19 +78,23 @@ const ScrollPicker = (props: ScrollPickerProps): JSX.Element => {
 
   return (
     <View style={props.wrapperStyle}>
-      <View style={highlightStyle} />
+      <View style={highlightStyle} onLayout={event=>setHeightOfElement(event.nativeEvent.layout.height)}/>
       <ScrollView
         ref={sView}
         bounces={false}
         showsVerticalScrollIndicator={false}
-        onMomentumScrollBegin={(_e) => onMomentumScrollBegin()}
-        onMomentumScrollEnd={(e) => onMomentumScrollEnd(e)}
-        onScrollBeginDrag={(_e) => onScrollBeginDrag()}
-        onScrollEndDrag={(e) => onScrollEndDrag(e)}
+        onMomentumScrollEnd={onMomentumScrollEnd}
       >
-        {header}
-        {props.dataSource.map(props.renderItem)}
-        {footer}
+        <View 
+        style={{
+          paddingVertical: "52%"
+        }}>
+        {props.dataSource.map((value,index) => <View style={{
+          paddingVertical: "10%"
+          }}>
+            {props.renderItem(value,index)}
+          </View>)}  
+        </View>
       </ScrollView>
     </View>
   );
