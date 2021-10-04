@@ -1,121 +1,81 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   ViewStyle,
 } from "react-native";
 
+//TODO: Make it work with % and vh
+interface CustomViewStyle extends ViewStyle{
+  height: number
+}
+
 export type ScrollPickerProps = {
-  style?: ViewStyle;
   dataSource: Array<string | number>;
-  selectedIndex?: number;
+  renderItem: (
+    data: string | number,
+    index: number
+  ) => JSX.Element;
   onValueChange?: (
-    value: ScrollPickerProps["dataSource"][0],
+    value: string | number,
     index: number
   ) => void;
-  renderItem?: (
-    data: ScrollPickerProps["dataSource"][0],
-    index: number,
-    isSelected: boolean
-  ) => JSX.Element;
   highlightColor?: string;
+  highlightHeight: 30;
+  selectedIndex: 0;
 
-  wrapperStyle?: ViewStyle;
-  itemStyle?: ViewStyle
+  wrapperStyle?: CustomViewStyle;
 };
 
-export default function ScrollPicker({
-  itemStyle = {height: 30},
-  style,
-  ...props
-}: ScrollPickerProps): JSX.Element {
-  const [initialized, setInitialized] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(
-    props.selectedIndex && props.selectedIndex >= 0 ? props.selectedIndex : 0
-  );
+const ScrollPicker = (props: ScrollPickerProps): JSX.Element => {
+  const [selectedIndex, setSelectedIndex] = useState<number>(
+    props.selectedIndex >= 0 ? props.selectedIndex : 0
+    );
   const sView = useRef<ScrollView>(null);
   const [isScrollTo, setIsScrollTo] = useState(false);
   const [dragStarted, setDragStarted] = useState(false);
   const [momentumStarted, setMomentumStarted] = useState(false);
-  const [timer, setTimer] = useState<NodeJS.Timeout | null>(null);
 
-  useEffect(
-    function initialize() {
-      if (initialized) return;
-      setInitialized(true);
-
+  useEffect(() => {
       setTimeout(() => {
-        const y = Number(itemStyle.height) * selectedIndex;
-        sView?.current?.scrollTo({ y: y });
+        sView?.current?.scrollTo({ y:  props.highlightHeight || 0 * selectedIndex });
       }, 0);
-
-      return () => {
-        timer && clearTimeout(timer);
-      };
-    },
-    [initialized, itemStyle, selectedIndex, sView, timer]
-  );
+    },[]);
 
   const renderPlaceHolder = () => {
-    const h = (Number(props.wrapperStyle?.height) - Number(itemStyle.height)) / 2;
+    const h = ((props.wrapperStyle?.height || 0) - props.highlightHeight) / 2;
     const header = <View style={{ height: h, flex: 1 }} />;
     const footer = <View style={{ height: h, flex: 1 }} />;
     return { header, footer };
   };
-
-  const renderItem = (
-    data: ScrollPickerProps["dataSource"][0],
-    index: number
-  ) => {
-    const isSelected = index === selectedIndex;
-    const item = props.renderItem ? (
-      props.renderItem(data, index, isSelected)
-    ) : (
-      <Text>
-        {data}
-      </Text>
-    );
-
-    return (
-      <View style={[ { height: Number(itemStyle.height) }]} key={index}>
-        {item}
-      </View>
-    );
-  };
   const scrollFix = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      let y = 0;
-      const h = Number(itemStyle.height);
-      if (e.nativeEvent.contentOffset) {
-        y = e.nativeEvent.contentOffset.y;
-      }
-      const _selectedIndex = Math.round(y / h);
+      
+      const positionAfterScroll = e.nativeEvent.contentOffset.y || 0;
+      const closestElementToScrollPosition = Math.round(positionAfterScroll / props.highlightHeight);
 
-      const _y = _selectedIndex * h;
-      if (_y !== y) {
+      const positionOfClosetElement = closestElementToScrollPosition * props.highlightHeight;
+      if (positionOfClosetElement !== positionAfterScroll) {
         // using scrollTo in ios, onMomentumScrollEnd will be invoked
         if (Platform.OS === "ios") {
           setIsScrollTo(true);
         }
-        sView?.current?.scrollTo({ y: _y });
-      }
-      if (selectedIndex === _selectedIndex) {
-        return;
+        sView?.current?.scrollTo({ y: positionOfClosetElement });
       }
       // onValueChange
-      if (props.onValueChange) {
-        const selectedValue = props.dataSource[_selectedIndex];
-        setSelectedIndex(_selectedIndex);
-        props.onValueChange(selectedValue, _selectedIndex);
+      if (selectedIndex !== closestElementToScrollPosition && props.onValueChange) {
+        setSelectedIndex(closestElementToScrollPosition);
+        props.onValueChange(
+          props.dataSource[closestElementToScrollPosition], 
+          closestElementToScrollPosition
+        );
       }
     },
-    [Number(itemStyle.height), props, selectedIndex]
+    [props, selectedIndex]
   );
 
   const onScrollBeginDrag = () => {
@@ -124,7 +84,6 @@ export default function ScrollPicker({
     if (Platform.OS === "ios") {
       setIsScrollTo(false);
     }
-    timer && clearTimeout(timer);
   };
 
   const onScrollEndDrag = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -132,18 +91,15 @@ export default function ScrollPicker({
 
     // if not used, event will be garbaged
     const _e: NativeSyntheticEvent<NativeScrollEvent> = { ...e };
-    timer && clearTimeout(timer);
-    setTimer(
       setTimeout(() => {
         if (!momentumStarted) {
           scrollFix(_e);
         }
       }, 50)
-    );
   };
+  
   const onMomentumScrollBegin = () => {
     setMomentumStarted(true);
-    timer && clearTimeout(timer);
   };
 
   const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -158,8 +114,8 @@ export default function ScrollPicker({
 
   const highlightStyle: ViewStyle = {
     position: "absolute",
-    top: (Number(props.wrapperStyle?.height) - Number(itemStyle.height)) / 2,
-    height: itemStyle.height,
+    top: ((props.wrapperStyle?.height || 0) - props.highlightHeight) / 2,
+    height: props.highlightHeight,
     width: "100%",
     borderTopColor: props.highlightColor,
     borderBottomColor: props.highlightColor,
@@ -180,9 +136,12 @@ export default function ScrollPicker({
         onScrollEndDrag={(e) => onScrollEndDrag(e)}
       >
         {header}
-        {props.dataSource.map(renderItem)}
+        {props.dataSource.map(props.renderItem)}
         {footer}
       </ScrollView>
     </View>
   );
 }
+
+
+export default ScrollPicker;
