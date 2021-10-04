@@ -89,7 +89,7 @@ const ScrollPicker = (props: ScrollPickerProps): JSX.Element => {
         style={{
           paddingVertical: "52%"
         }}>
-        {props.dataSource.map((value,index) => <View style={{
+        {props.dataSource.map((value,index) => <View key={index} style={{
           paddingVertical: "10%"
           }}>
             {props.renderItem(value,index)}
